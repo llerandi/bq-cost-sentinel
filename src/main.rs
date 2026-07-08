@@ -2,11 +2,8 @@ mod config;
 mod auth;
 mod server;
 mod google_client;
+mod pricing;
 
-use axum::{
-    routing::{get, post},
-    Router
-};
 use config::AppConfig;
 use std::{
     net::SocketAddr, 
@@ -43,13 +40,7 @@ async fn main() {
         "Starting BigQuery Cost Sentinel in proxy mode..."
     );
 
-    let app = Router::new()
-        .route("/health", get(|| async { "OK" }))
-        .route(
-            "/bigquery/v2/projects/:project_id/queries",
-            post(server::proxy_query),
-        )
-        .with_state(shared_state);        
+    let app = server::build_router(shared_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     info!("Server listening on http://{}", addr);
