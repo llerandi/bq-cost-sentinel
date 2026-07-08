@@ -57,9 +57,23 @@ mod tests {
 
     /// Removes every config-related env var so each test starts from a
     /// clean slate, independent of execution order.
+    ///
+    /// `env::remove_var`/`set_var` are `unsafe` since Rust edition 2024
+    /// because mutating process-wide env vars while another thread reads
+    /// them is undefined behavior on some platforms. The `#[serial]`
+    /// attribute on every test in this module ensures these tests never
+    /// run concurrently with each other, which keeps this safe in practice.
     fn clear_env() {
         for var in ["PORT", "BQ_MAX_COST_PER_QUERY", "BQ_PRICE_PER_TIB", "ENFORCE_MODE"] {
-            env::remove_var(var);
+            unsafe {
+                env::remove_var(var);
+            }
+        }
+    }
+
+    fn set_env(key: &str, value: &str) {
+        unsafe {
+            env::set_var(key, value);
         }
     }
 
@@ -82,10 +96,10 @@ mod tests {
     #[serial]
     fn reads_overrides_from_the_environment() {
         clear_env();
-        env::set_var("PORT", "9090");
-        env::set_var("BQ_MAX_COST_PER_QUERY", "12.5");
-        env::set_var("BQ_PRICE_PER_TIB", "7.8125");
-        env::set_var("ENFORCE_MODE", "false");
+        set_env("PORT", "9090");
+        set_env("BQ_MAX_COST_PER_QUERY", "12.5");
+        set_env("BQ_PRICE_PER_TIB", "7.8125");
+        set_env("ENFORCE_MODE", "false");
 
         let config = AppConfig::from_process_env();
 
@@ -102,7 +116,7 @@ mod tests {
     #[should_panic(expected = "PORT must be a valid number")]
     fn panics_when_port_is_not_numeric() {
         clear_env();
-        env::set_var("PORT", "not-a-port");
+        set_env("PORT", "not-a-port");
 
         // No cleanup after this: the panic short-circuits execution, but
         // every test calls clear_env() at its own start, so leftover state
@@ -114,7 +128,7 @@ mod tests {
     #[serial]
     fn falls_back_to_enforced_when_enforce_mode_is_not_a_valid_boolean() {
         clear_env();
-        env::set_var("ENFORCE_MODE", "maybe");
+        set_env("ENFORCE_MODE", "maybe");
 
         let config = AppConfig::from_process_env();
 
